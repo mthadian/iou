@@ -9,6 +9,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.servlet.http.HttpServletRequest;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,6 +32,11 @@ import com.iou.iou.Repositories.DebtRepository;
 import com.iou.iou.Repositories.UserRepository;
 import com.iou.iou.models.Debts;
 import com.iou.iou.models.Users;
+
+/**
+*
+* @author PMMuthama
+*/
 
 @RestController
 public class UserControllers 
@@ -41,12 +49,13 @@ public class UserControllers
 	@Autowired
 	DebtRepository debtRepository;
 	
+	ObjectMapper objectMapper = new ObjectMapper(); 
 	 
 	@GetMapping("/users")
 	
 	public ResponseEntity<?> getAllUsers() throws Exception
 	{
-		ObjectMapper objectMapper = new ObjectMapper(); 
+		
 		List<Users> list_Users=new ArrayList<Users>();
 		ObjectNode outPutJson=objectMapper.createObjectNode();
 		
@@ -112,46 +121,30 @@ public class UserControllers
 			return new ResponseEntity<>(outPutJson,HttpStatus.OK);
 		} catch (Exception e) 
 		{
-			
+			ObjectNode json_FinalOutPut=objectMapper.createObjectNode();
 			
 			e.printStackTrace();
 			StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));
             String exceptionAsString = sw.toString();
+            
+            json_FinalOutPut.put("statusDescription", "Internal Server Error");
+			json_FinalOutPut.put("exception", exceptionAsString);
             
             logger.error(exceptionAsString,newline);
 			return new ResponseEntity<>(exceptionAsString,HttpStatus.INTERNAL_SERVER_ERROR);
 		}
 	}
 	
-	/*
-	@GetMapping("/users")
-	public ResponseEntity<?> getUsers() throws Exception
-	{
-		List<Users> list_Users=new ArrayList<Users>();
-		try 
-		{
-			list_Users=userRepository.findAllByOrderByNameAsc();
-			return new ResponseEntity<>(list_Users,HttpStatus.OK);
-			
-		} catch (Exception e) 
-		{
-			e.printStackTrace();
-			StringWriter sw = new StringWriter();
-            e.printStackTrace(new PrintWriter(sw));
-            String exceptionAsString = sw.toString();
-            
-            logger.error(exceptionAsString,newline);
-			return new ResponseEntity<>(exceptionAsString,HttpStatus.INTERNAL_SERVER_ERROR);
-		}
-	}
-	*/
+
 	
 	@PostMapping("/add")
 	public ResponseEntity<?> addUser(@RequestBody JsonNode json_User) throws Exception
 	{
 		Users user=new Users();
 		String user_name="";
+		ObjectNode json_FinalOutPut = objectMapper.createObjectNode();
+
 		try 
 		{
 			if(json_User.hasNonNull("user")) 
@@ -159,23 +152,39 @@ public class UserControllers
 				user_name=json_User.get("user").asText();
 				if(user_name.length()==0)
 				{
-					return new ResponseEntity<>("Enter name of user",HttpStatus.BAD_REQUEST);
+					logger.error("Enter name of user"); 
+					
+					json_FinalOutPut.put("statusCode", 1);
+					json_FinalOutPut.put("statusDesciption", "Enter name of user");
+					return new ResponseEntity<>(json_FinalOutPut,HttpStatus.BAD_REQUEST);
 				}
 			}
 			else
 			{
-				return new ResponseEntity<>("name can not be blank",HttpStatus.BAD_REQUEST);
+				logger.error("Request structure has null name");
+				json_FinalOutPut.put("statusCode", 1);
+				json_FinalOutPut.put("statusDesciption", "Request structure has null name");
+				return new ResponseEntity<>(json_FinalOutPut,HttpStatus.BAD_REQUEST);
 			}
 			
 			if (userRepository.findByNameIgnoreCase(user_name).isPresent()) 
 			{
-				return new ResponseEntity<>("User Already Exists",HttpStatus.OK);
+				logger.info("User "+user_name+" Already Exists");
+				json_FinalOutPut.put("statusCode", 1);
+				json_FinalOutPut.put("statusDesciption", "User "+user_name+" Already Exists");
+				return new ResponseEntity<>(json_FinalOutPut,HttpStatus.OK);
 				
 			}
 			user.setName(user_name);
 			userRepository.save(user);
 			logger.info("User successfully saved");
-			return new ResponseEntity<>(user,HttpStatus.OK);
+			json_FinalOutPut.put("statusCode", 0);
+			json_FinalOutPut.put("statusDesciption", "User Successfully Created");
+			json_FinalOutPut.putPOJO("user", user);
+			
+			
+			return new ResponseEntity<>(json_FinalOutPut,HttpStatus.OK);
+			
 			
 		} catch (Exception e) 
 		{
@@ -184,23 +193,42 @@ public class UserControllers
             e.printStackTrace(new PrintWriter(sw));
             String exceptionAsString = sw.toString();
             
+            json_FinalOutPut.put("statusDescription", "Internal Server Error");
+			json_FinalOutPut.put("exception", exceptionAsString);
+            
+            
             logger.error(exceptionAsString,newline);
 			return new ResponseEntity<>(exceptionAsString,HttpStatus.INTERNAL_SERVER_ERROR);
 		}
 	}
 	
 	@DeleteMapping("/user/delete/{name}")
-	public ResponseEntity<?> deleteUserById(@PathVariable("name") String name) throws Exception
+	public ResponseEntity<?> deleteUserById(@PathVariable("name") String name,HttpServletRequest request) throws Exception
 	{
+		ObjectNode json_FinalOutPut = objectMapper.createObjectNode();
+		
 		try 
 		{
+			RestTemplate restTemplate = new RestTemplate(); 
+			String uri=request.getScheme()+"://"+request.getServerName()+":"+request.getServerPort();
+			
 			if(!userRepository.findByNameIgnoreCase(name).isPresent())
 			{
-				return new ResponseEntity<>("No user Exist with id "+name,HttpStatus.BAD_REQUEST);
+				json_FinalOutPut.put("statusCode", 1);
+				json_FinalOutPut.put("statusDesciption", "No user Exists with Name: "+name);
+				return new ResponseEntity<>(json_FinalOutPut,HttpStatus.OK);
+				
 			}
 			
 			userRepository.deleteById(userRepository.findByNameIgnoreCase(name).get().getUserId());
-			return new ResponseEntity<>(name+" deleted",HttpStatus.OK);
+			logger.info("User "+name+" deleted successfully");
+			//json_FinalOutPut.put("statusCode", 0);
+			//json_FinalOutPut.put("statusDesciption", "User "+name+" deleted successfully");
+			
+			json_FinalOutPut=restTemplate.getForObject(uri+"/users", ObjectNode.class);
+			
+			return new ResponseEntity<>(json_FinalOutPut,HttpStatus.OK);
+			
 			
 		} catch (Exception e)
 		{
@@ -208,6 +236,9 @@ public class UserControllers
 			StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));
             String exceptionAsString = sw.toString();
+            json_FinalOutPut.put("statusDescription", "Internal Server Error");
+			json_FinalOutPut.put("exception", exceptionAsString);
+            
             
             logger.error(exceptionAsString,newline);
 			return new ResponseEntity<>(exceptionAsString,HttpStatus.INTERNAL_SERVER_ERROR);

@@ -7,6 +7,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.iou.iou.models.Users;
 
+/**
+*
+* @author PMMuthama
+*/
 public interface UserRepository extends JpaRepository<Users, Integer>
 {
 

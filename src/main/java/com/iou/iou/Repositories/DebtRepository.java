@@ -6,6 +6,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.iou.iou.models.Debts;
 
+/**
+*
+* @author PMMuthama
+*/
 public interface DebtRepository extends JpaRepository<Debts, Integer>
 {
 
