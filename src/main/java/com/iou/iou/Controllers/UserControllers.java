@@ -71,32 +71,63 @@ public class UserControllers
 				List<Debts> list_BorrowedFrom=new ArrayList<Debts>();
 				List<Debts> list_LendedTo=new ArrayList<Debts>();
 			
-				
+				HashMap<String,  BigDecimal> hashMapBorrowerFrom=new HashMap<String, BigDecimal>();
+				HashMap<String,  BigDecimal> hashMapLendedTo=new HashMap<String, BigDecimal>();
 				
 			
 				//get list of users that current user has lent money to
-				list_LendedTo=debtRepository.findByLender_UserId(user.getUserId());
+				list_LendedTo=debtRepository.findAllByLender_UserIdOrderByBorrower_NameAsc(user.getUserId());
 				BigDecimal totalLendedOut=new BigDecimal(0);
-				List<JsonNode> list_Borrowers=new ArrayList<JsonNode>();				
+				BigDecimal currentBorrowerTotalAmount=new BigDecimal(0);
+					
 				for(Debts a_borrower:list_LendedTo)
 				{
 					
-					ObjectNode json_Aborrower = objectMapper.createObjectNode();
-					json_Aborrower.put(a_borrower.getBorrower().getName(), a_borrower.getAmount());
-					list_Borrowers.add(json_Aborrower);		
-					
+					/*If a borrower has borrowed more than once from the same person ,
+					 * get the total amount borrowed from that person by current borrower
+					 * 
+					 * else,get the amount borrowed , if he/she has borrowed only once
+					 * *
+					 */
+					if(hashMapLendedTo.containsKey(a_borrower.getBorrower().getName()))
+					{
+						
+						currentBorrowerTotalAmount=hashMapLendedTo.get(a_borrower.getBorrower().getName());					
+						currentBorrowerTotalAmount=currentBorrowerTotalAmount.add(a_borrower.getAmount());
+						hashMapLendedTo.put(a_borrower.getBorrower().getName(), currentBorrowerTotalAmount);
+					}
+					else 
+					{
+						hashMapLendedTo.put(a_borrower.getBorrower().getName(), a_borrower.getAmount());
+					}
 					totalLendedOut=totalLendedOut.add(a_borrower.getAmount());
 				}
 				
 				//get the list of users that the current user has borrowed from
-				list_BorrowedFrom=debtRepository.findByBorrower_UserId(user.getUserId());
+				list_BorrowedFrom=debtRepository.findAllByBorrower_UserIdOrderByLender_NameAsc(user.getUserId());
 				BigDecimal totalBorrowedIn=new BigDecimal(0);
-				List<JsonNode> list_Lenders=new ArrayList<JsonNode>();	
+				
+				BigDecimal currentLenderTotalAmount=new BigDecimal(0);
 				for(Debts a_Lender:list_BorrowedFrom)
 				{
-					ObjectNode json_ALender = objectMapper.createObjectNode();
-					json_ALender.put(a_Lender.getLender().getName(), a_Lender.getAmount());
-					list_Lenders.add(json_ALender);
+					/*If a lender has lent more than once to current user ,
+					 * get the total amount lended In
+					 * 
+					 * else,get the lended in , if he/she has lended in once from same person
+					 * *
+					 */
+					if(hashMapBorrowerFrom.containsKey(a_Lender.getLender().getName()))
+					{
+						currentLenderTotalAmount=hashMapBorrowerFrom.get(a_Lender.getLender().getName());
+						currentLenderTotalAmount=currentLenderTotalAmount.add(a_Lender.getAmount());
+						hashMapBorrowerFrom.put(a_Lender.getLender().getName(), currentLenderTotalAmount);
+					}
+					else 
+					{
+						hashMapBorrowerFrom.put(a_Lender.getLender().getName(), a_Lender.getAmount());
+					}
+					
+					
 					totalBorrowedIn=totalBorrowedIn.add(a_Lender.getAmount());
 					
 				
@@ -105,10 +136,10 @@ public class UserControllers
 				//calculate net balance
 				BigDecimal balance=totalLendedOut.subtract(totalBorrowedIn);
 			
-				//add the details of name,owes,owedby and balance of the current user to a json object
+	
 				jsonUser.put("name", user.getName());
-				jsonUser.putPOJO("owes", list_Lenders);
-				jsonUser.putPOJO("owed_by", list_Borrowers);
+				jsonUser.putPOJO("owes", hashMapBorrowerFrom);
+				jsonUser.putPOJO("owed_by", hashMapLendedTo);
 				jsonUser.put("balance", balance);
 				
 				//add the final details of the current user to the final output
